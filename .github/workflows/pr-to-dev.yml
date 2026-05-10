@@ -1,0 +1,74 @@
+name: PR to Dev - CI Checks
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install backend dependencies
+        run: cd backend && npm ci
+      - name: Run backend lint
+        run: cd backend && npm run lint
+
+  npm-audit:
+    name: NPM Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Audit backend
+        run: cd backend && npm audit --audit-level=high
+        continue-on-error: true
+
+  snyk-security:
+    name: Snyk Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install backend dependencies
+        run: cd backend && npm ci
+      - name: Run Snyk
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+        continue-on-error: true
+
+  tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install backend dependencies
+        run: cd backend && npm ci
+      - name: Run tests
+        run: cd backend && npm test
+
+  build-docker:
+    name: Build Docker Images
+    needs: [lint, npm-audit, snyk-security, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t backend:test ./backend
+      - name: Build frontend image
+        run: docker build -t frontend:test ./frontend
